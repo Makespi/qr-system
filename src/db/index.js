@@ -73,6 +73,9 @@ export function migrate() {
   addColumn('product_model', "currency", "TEXT DEFAULT 'CNY'");
   addColumn('product_model', 'highlights', 'TEXT');
   addColumn('param_template', 'groups', 'TEXT');
+  // 电池合规（EU 2023/1542 Art.13(6)）
+  addColumn('tenant', 'registered_address', 'TEXT');
+  addColumn('tenant', 'trademark', 'TEXT');
 }
 
 

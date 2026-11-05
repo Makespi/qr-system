@@ -24,7 +24,47 @@ const DEMO = {
     en: { company_name: 'Jinglong Electric Sprayers' },
     es: { company_name: 'Pulverizadores Eléctricos Jinglong' },
   },
+  registered_address: '广东省广州市番禺区番禺大道北 555 号节能科技园 B 座',
+  trademark: '精龙 JINGLONG',
   remark: '演示租户，产品数据取自 zlslc.com 3WBD-16 型产品页',
+};
+
+// ---------- 电池合规种子（EU 2023/1542 Art.13(6) demo）----------
+// 3WBD-16 随机配备的 12V 14Ah 锂电池组。全部为示例数据。
+const BATTERY = {
+  model_code: 'JL-1214',
+  model_name: '精龙 12V 14Ah 锂离子电池组',
+  category: 'portable',          // 便携式电池（含在设备中）
+  chemistry: 'li-ion',
+  rated_voltage: '12V',
+  rated_capacity: '14Ah（168Wh）',
+  qr_mode: 'serial',             // 一序列号一码
+  serial_count: 12,
+  i18n: {
+    en: { model_name: 'Jinglong 12V 14Ah Li-ion Battery Pack' },
+    de: { model_name: 'Jinglong 12V 14Ah Li-Ionen-Batteriepack' },
+  },
+  materials: [
+    { key: 'cobalt', share: '16%' },
+    { key: 'lithium', share: '4%' },
+    { key: 'nickel', share: '6%' },
+    { key: 'manganese', share: '5%' },
+    { key: 'graphite', share: '0%' },
+    { key: 'copper', share: '20%' },
+    { key: 'aluminum', share: '35%' },
+  ],
+  doc: {
+    doc_no: 'EU-DOC-2026-JL1214-001',
+    issued_at: '2026-10-30',
+    standards: [
+      'EN 62133-2:2021（含碱性电解液电池安全）',
+      'UN 38.3（运输安全，Rev.7）',
+      'Regulation (EU) 2023/1542',
+    ],
+    signer_name: 'Zheng Wei',
+    signer_role: 'Technical Director',
+    place: 'Guangzhou, China',
+  },
 };
 
 const FIELD_GROUPS = [
@@ -121,23 +161,25 @@ const seed = db.transaction(() => {
     const info = db
       .prepare(
         `INSERT INTO tenant (tenant_key, company_name, contact_name, contact_phone,
-                             brand_color, service_phone, service_hours, i18n, quota_codes, remark)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                             brand_color, service_phone, service_hours, i18n,
+                             registered_address, trademark, quota_codes, remark)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(DEMO.tenant_key, DEMO.company_name, DEMO.contact_name, DEMO.contact_phone,
            DEMO.brand_color, DEMO.service_phone, DEMO.service_hours,
-           JSON.stringify(DEMO.i18n), 100000, DEMO.remark);
+           JSON.stringify(DEMO.i18n), DEMO.registered_address, DEMO.trademark,
+           100000, DEMO.remark);
     tenant = db.prepare('SELECT * FROM tenant WHERE id = ?').get(info.lastInsertRowid);
     console.log(`✓ 示例租户：${tenant.company_name}（id=${tenant.id}）`);
   } else {
     db.prepare(
       `UPDATE tenant SET company_name = ?, contact_name = ?, contact_phone = ?,
                          brand_color = ?, service_phone = ?, service_hours = ?,
-                         i18n = ?, remark = ?
+                         i18n = ?, registered_address = ?, trademark = ?, remark = ?
        WHERE id = ?`
     ).run(DEMO.company_name, DEMO.contact_name, DEMO.contact_phone, DEMO.brand_color,
           DEMO.service_phone, DEMO.service_hours, JSON.stringify(DEMO.i18n),
-          DEMO.remark, tenant.id);
+          DEMO.registered_address, DEMO.trademark, DEMO.remark, tenant.id);
     console.log(`✓ 示例租户已更新：${DEMO.company_name}（id=${tenant.id}）`);
   }
 
@@ -224,6 +266,74 @@ const seed = db.transaction(() => {
        VALUES (?, ?, ?, date('now','localtime'), ?)`
     ).run(tenant.id, batchNo, model.id, 500);
     console.log(`✓ 演示批次：${batchNo}（生产日期 ${new Date().toISOString().slice(0, 10)}）`);
+  }
+
+  // ---------- 电池合规码（EU 2023/1542 Art.13(6) demo）----------
+  let bDoc = db
+    .prepare('SELECT * FROM battery_doc WHERE tenant_id = ? AND doc_no = ?')
+    .get(tenant.id, BATTERY.doc.doc_no);
+  if (!bDoc) {
+    const info = db
+      .prepare(
+        `INSERT INTO battery_doc (tenant_id, doc_no, issued_at, standards, signer_name, signer_role, place)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(tenant.id, BATTERY.doc.doc_no, BATTERY.doc.issued_at,
+           JSON.stringify(BATTERY.doc.standards), BATTERY.doc.signer_name,
+           BATTERY.doc.signer_role, BATTERY.doc.place);
+    bDoc = db.prepare('SELECT * FROM battery_doc WHERE id = ?').get(info.lastInsertRowid);
+    console.log(`✓ EU 符合性声明：${bDoc.doc_no}`);
+  }
+
+  let bModel = db
+    .prepare('SELECT * FROM battery_model WHERE tenant_id = ? AND model_code = ?')
+    .get(tenant.id, BATTERY.model_code);
+  const bValues = [
+    BATTERY.model_name, BATTERY.category, BATTERY.chemistry,
+    BATTERY.rated_voltage, BATTERY.rated_capacity, BATTERY.qr_mode,
+    bDoc.id, JSON.stringify(BATTERY.materials), JSON.stringify(BATTERY.i18n),
+  ];
+  if (bModel) {
+    db.prepare(
+      `UPDATE battery_model
+       SET model_name = ?, category = ?, chemistry = ?, rated_voltage = ?, rated_capacity = ?,
+           qr_mode = ?, doc_id = ?, materials = ?, i18n = ?
+       WHERE id = ?`
+    ).run(...bValues, bModel.id);
+    console.log(`✓ 电池型号已更新：${BATTERY.model_code} ${BATTERY.model_name}`);
+  } else {
+    const info = db
+      .prepare(
+        `INSERT INTO battery_model
+           (tenant_id, model_code, model_name, category, chemistry, rated_voltage,
+            rated_capacity, qr_mode, doc_id, materials, i18n)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(tenant.id, BATTERY.model_code, ...bValues);
+    bModel = db.prepare('SELECT * FROM battery_model WHERE id = ?').get(info.lastInsertRowid);
+    console.log(`✓ 电池型号：${BATTERY.model_code} ${BATTERY.model_name}`);
+  }
+
+  // 序列号：缺几个补几个，不重复生成
+  const serialCount = db
+    .prepare('SELECT COUNT(*) AS n FROM battery_serial WHERE model_id = ?')
+    .get(bModel.id).n;
+  if (serialCount < BATTERY.serial_count) {
+    const year = new Date().getFullYear();
+    const p = (n) => String(n).padStart(4, '0');
+    const prodDate = BATTERY.doc.issued_at;
+    const insert = db.prepare(
+      `INSERT OR IGNORE INTO battery_serial (tenant_id, model_id, serial, batch_no, production_date)
+       VALUES (?, ?, ?, ?, ?)`
+    );
+    let added = 0;
+    for (let i = serialCount + 1; i <= BATTERY.serial_count; i++) {
+      insert.run(tenant.id, bModel.id, `JL1214-${year}-${p(i)}`, 'B20261030-01', prodDate);
+      added++;
+    }
+    console.log(`✓ 电池序列号：新增 ${added} 个（共 ${BATTERY.serial_count} 个）`);
+  } else {
+    console.log(`✓ 电池序列号：已有 ${serialCount} 个，跳过`);
   }
 
   return tenant;

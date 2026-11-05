@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS tenant (
   brand_color    TEXT    DEFAULT '#1D9E75',        -- 扫码页主题色
   service_phone  TEXT,
   service_hours  TEXT,                             -- 客服服务时间，如 9:00-21:00
+  registered_address TEXT,                         -- 注册地址（电池合规页 / DoC 用）
+  trademark      TEXT,                             -- 注册商标（电池合规页 / DoC 用）
   domain         TEXT    UNIQUE,                   -- 可选：客户自有域名
   i18n           TEXT,                             -- JSON: {en:{company_name},es:{company_name}}
   quota_codes    INTEGER NOT NULL DEFAULT 0,       -- 剩余可用码数
@@ -164,3 +166,73 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at TEXT    DEFAULT (datetime('now','localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_log(tenant_id);
+
+-- ============================================================
+-- 电池合规二维码（Regulation (EU) 2023/1542, Article 13(6)，2027-02-18 起适用）
+-- 二维码指向的落地页须包含 5 个模块：产品信息 / 制造商信息 /
+-- 关键原材料 / 废弃处理说明 / EU 符合性声明（DoC）
+-- ============================================================
+
+-- ---------- 电池型号（「一型号一码」的单位；qr_mode=serial 时为「一序列号一码」的母体） ----------
+CREATE TABLE IF NOT EXISTS battery_model (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id       INTEGER NOT NULL,
+  model_code      TEXT    NOT NULL,                -- 电池型号，如 JL-1214
+  model_name      TEXT    NOT NULL,
+  category        TEXT    NOT NULL DEFAULT 'portable', -- portable / ev / lmt / industrial
+  chemistry       TEXT    NOT NULL DEFAULT 'li-ion',   -- 化学体系 key，展示文案在多语言字典
+  rated_voltage   TEXT,                            -- 额定电压，如 12V
+  rated_capacity  TEXT,                            -- 额定容量，如 14Ah（168Wh）
+  qr_mode         TEXT    NOT NULL DEFAULT 'model',-- model=一型号一码 / serial=一序列号一码
+  doc_id          INTEGER,                         -- 关联 EU 符合性声明
+  materials       TEXT,                            -- JSON: [{key, share}] 关键原材料及回收含量占比
+  i18n            TEXT,                            -- JSON: {en:{model_name},...}
+  status          INTEGER NOT NULL DEFAULT 1,
+  created_at      TEXT    DEFAULT (datetime('now','localtime')),
+  UNIQUE (tenant_id, model_code)
+);
+CREATE INDEX IF NOT EXISTS idx_bmodel_tenant ON battery_model(tenant_id);
+
+-- ---------- 电池序列号（一序列号一码模式下打印的单位） ----------
+CREATE TABLE IF NOT EXISTS battery_serial (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id       INTEGER NOT NULL,
+  model_id        INTEGER NOT NULL,
+  serial          TEXT    NOT NULL,
+  batch_no        TEXT,
+  production_date TEXT,
+  status          INTEGER NOT NULL DEFAULT 1,      -- 1 正常 0 作废
+  scan_count      INTEGER NOT NULL DEFAULT 0,
+  first_scan_at   TEXT,
+  created_at      TEXT    DEFAULT (datetime('now','localtime')),
+  UNIQUE (model_id, serial)
+);
+CREATE INDEX IF NOT EXISTS idx_bserial_model ON battery_serial(model_id);
+
+-- ---------- EU 符合性声明（Annex VI Part B，demo 简化字段） ----------
+CREATE TABLE IF NOT EXISTS battery_doc (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id   INTEGER NOT NULL,
+  doc_no      TEXT    NOT NULL,
+  issued_at   TEXT,
+  standards   TEXT,                                -- JSON 数组：引用的标准
+  signer_name TEXT,
+  signer_role TEXT,
+  place       TEXT,
+  created_at  TEXT    DEFAULT (datetime('now','localtime')),
+  UNIQUE (tenant_id, doc_no)
+);
+
+-- ---------- 电池码扫码日志（后台流量统计的数据源） ----------
+CREATE TABLE IF NOT EXISTS battery_scan_log (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL,
+  model_id  INTEGER NOT NULL,
+  serial    TEXT,
+  ip        TEXT,
+  region    TEXT,
+  ua        TEXT,
+  scan_at   TEXT    DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_blog_model ON battery_scan_log(model_id);
+CREATE INDEX IF NOT EXISTS idx_blog_time  ON battery_scan_log(scan_at);

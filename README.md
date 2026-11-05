@@ -242,9 +242,12 @@ src/
 │   └── schema.sql          9 张表完整结构
 ├── services/
 │   ├── codes.js            码生成、配额扣减、打标状态、作废
-│   └── scan.js             扫码判定：校验 → 状态判定 → 记录
+│   ├── scan.js             扫码判定：校验 → 状态判定 → 记录
+│   └── battery.js          电池合规码解析（型号/序列号）+ 扫码记录
 ├── views/
 │   ├── scanPage.js         扫码结果页（移动端优先）
+│   ├── batteryPage.js      电池合规落地页（5 模块 / 6 语言）
+│   ├── docPdf.js           EU 符合性声明 PDF（pdfkit 现场生成）
 │   └── passport.js         JSON-LD 商品数据（DPP demo）
 scripts/
 ├── init-db.js              建表 + 种子数据
@@ -270,6 +273,7 @@ deploy/
 - [x] 批次追溯：扫码页展示生产批次号与生产日期
 - [x] 客服信息：电话一键拨号 + 服务时间（如 9:00-21:00）
 - [x] GS1 Digital Link 兼容（demo）：`/01/{gtin}/21/{serial}` 解析、内容协商、二维码载荷切换
+- [x] 电池合规二维码（EU 2023/1542 Art.13(6) demo）：5 模块落地页、6 语言、DoC PDF、一型号/一序列号一码
 - [x] 二维码图片接口 `/api/qr/:code.png`
 - [x] 演示页 `/demo`
 
@@ -304,6 +308,29 @@ curl -H 'Accept: application/ld+json' http://localhost:3000/01/06912345678902/21
 
 - 演示 GTIN `06912345678902` 校验位正确，但**不是真实厂商前缀**，正式印刷前必须换成向 GS1 申请的 GTIN。二维码载荷印上去就改不了。
 - 这是「语法兼容 + 机读数据」，还不是通过认证的欧盟 DPP：没有 GS1 注册中心、没有 DPP 标准数据模型（材料/回收/碳足迹等按品类 delegated act 定义）、电池护照（EU 2023/1542，2027-02-18 起）另算。
+
+**电池合规二维码（EU 2023/1542, Article 13(6)，demo）**
+
+按法规要求，2027-02-18 起所有投欧电池须带二维码，扫码落地页包含 5 个模块：
+
+| 模块 | 数据来源 |
+|---|---|
+| ① 产品信息 | `battery_model`：型号、化学体系、额定电压/容量、类别 + `battery_serial`：批次、生产日期 |
+| ② 制造商信息 | `tenant`：名称、注册商标、注册地址、联系方式 |
+| ③ 关键原材料 | `battery_model.materials`：材料 + 回收含量占比（示例值） |
+| ④ 废弃处理说明 | 内置多语言模板（WEEE 单独收集 + 带叉垃圾桶符号） |
+| ⑤ EU 符合性声明 | `battery_doc`：编号、签发日期、标准、签署人；`/b/{model}/doc.pdf` 现场生成 PDF（英文） |
+
+路由与二维码：
+
+- 落地页 `GET /b/{model}`（一型号一码）、`GET /b/{model}/{serial}`（一序列号一码）
+- 二维码 `GET /api/qr/battery/{model}.png`、`/api/qr/battery/{model}/{serial}.png`
+- 机读数据 `?format=json` 返回合规数据包（含法规引用）
+- 多语言：中/英/德/法/西/意，前端切换，无额外请求；扩展语言在 `views/batteryPage.js` 的 DICT 加词条
+
+示例（init-db 自动创建）：`/b/JL-1214`、`/b/JL-1214/JL1214-2026-0001`、`/b/JL-1214/doc.pdf`
+
+边界：演示数据均为示例，不构成合规意见；电池二维码 ≠ 电池护照（Article 77，仅 EV / LMT / >2kWh 工业电池需要护照）；DoC PDF 为英文 demo，正式文件的语言与签发要求按目标成员国规定。
 
 **码不能带租户信息。** 16 位纯随机，租户关系存在数据库里。这样公司改名、数据迁移、客户流失都不影响已经印在实物上的码。
 

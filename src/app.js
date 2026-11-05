@@ -1,11 +1,17 @@
 import express from 'express';
 import QRCode from 'qrcode';
-import { db } from './db/index.js';
+import { db, initSchema } from './db/index.js';
 import { isValid } from './core/codegen.js';
 import { digitalLinkUrl } from './core/gs1.js';
 import { scan, resolveDigitalLink, clientIp } from './services/scan.js';
+import { resolveBattery, batteryComplianceJson } from './services/battery.js';
 import { renderScanPage } from './views/scanPage.js';
+import { renderBatteryPage } from './views/batteryPage.js';
 import { buildProductJsonLd } from './views/passport.js';
+import { buildDocPdf } from './views/docPdf.js';
+
+// 幂等：新部署建表，老库补列（电池合规表也在这里保证存在）
+initSchema();
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -63,6 +69,74 @@ function wantsJsonLd(req) {
   const accept = String(req.headers.accept || '');
   if (/text\/html/i.test(accept)) return false;
   return /application\/(ld\+json|json)/i.test(accept);
+}
+
+// ---------- 电池合规二维码（Regulation (EU) 2023/1542, Article 13(6)）----------
+// 注意顺序：doc.pdf 要在 /b/:model/:serial 之前注册，否则 "doc.pdf" 会被当成序列号
+
+app.get('/b/:model/doc.pdf', async (req, res) => {
+  const data = resolveBattery(req.params.model, null, {
+    ip: clientIp(req),
+    ua: req.headers['user-agent'],
+  });
+  if (data.state === 'not_found' || !data.doc) {
+    return res.status(404).type('text').send('DoC not found');
+  }
+  try {
+    const buf = await buildDocPdf({
+      model: data.model,
+      tenant: data.tenant,
+      doc: data.doc,
+      url: `${BASE_URL}/b/${data.model.modelCode}`,
+    });
+    res.type('pdf').set('Content-Disposition', `inline; filename="DoC-${data.model.modelCode}.pdf"`).send(buf);
+  } catch (e) {
+    res.status(500).type('text').send(e.message);
+  }
+});
+
+app.get('/b/:model/:serial', (req, res) => {
+  const data = resolveBattery(req.params.model, req.params.serial, {
+    ip: clientIp(req),
+    ua: req.headers['user-agent'],
+  });
+  if (req.query.format === 'json') {
+    return res.json({ code: 0, data: batteryComplianceJson(data) });
+  }
+  res.status(data.state === 'not_found' ? 404 : 200).type('html').send(renderBatteryPage(data, BASE_URL));
+});
+
+app.get('/b/:model', (req, res) => {
+  const data = resolveBattery(req.params.model, null, {
+    ip: clientIp(req),
+    ua: req.headers['user-agent'],
+  });
+  if (req.query.format === 'json') {
+    return res.json({ code: 0, data: batteryComplianceJson(data) });
+  }
+  res.status(data.state === 'not_found' ? 404 : 200).type('html').send(renderBatteryPage(data, BASE_URL));
+});
+
+// 电池二维码图片：一型号一码 / 一序列号一码
+app.get('/api/qr/battery/:model.png', async (req, res) => {
+  await batteryQr(res, `${BASE_URL}/b/${encodeURIComponent(req.params.model)}`);
+});
+app.get('/api/qr/battery/:model/:serial.png', async (req, res) => {
+  await batteryQr(res, `${BASE_URL}/b/${encodeURIComponent(req.params.model)}/${encodeURIComponent(req.params.serial)}`);
+});
+
+async function batteryQr(res, payload) {
+  try {
+    const buf = await QRCode.toBuffer(payload, {
+      type: 'png',
+      errorCorrectionLevel: 'H',
+      margin: 1,
+      width: 320,
+    });
+    res.type('png').set('Cache-Control', 'public, max-age=86400').send(buf);
+  } catch (e) {
+    res.status(500).type('text').send(e.message);
+  }
 }
 
 // ---------- 扫码 JSON 接口（供小程序/App 复用）----------
@@ -125,10 +199,62 @@ app.get('/demo', (req, res) => {
     )
     .all();
 
-  res.type('html').send(renderDemo(rows));
+  // 电池合规码（EU 2023/1542 Art.13(6)）：型号级 + 每型号取 3 个序列号样例
+  const batteries = db
+    .prepare(
+      `SELECT b.model_code, b.model_name, b.qr_mode,
+              t.company_name,
+              (SELECT COUNT(*) FROM battery_serial s WHERE s.model_id = b.id) AS serial_count,
+              (SELECT COUNT(*) FROM battery_scan_log l WHERE l.model_id = b.id) AS scan_count
+       FROM battery_model b
+       LEFT JOIN tenant t ON t.id = b.tenant_id
+       WHERE b.status = 1
+       ORDER BY b.id`
+    )
+    .all()
+    .map((b) => ({
+      ...b,
+      samples: db
+        .prepare('SELECT serial FROM battery_serial WHERE model_id = (SELECT id FROM battery_model WHERE model_code = ?) ORDER BY id LIMIT 3')
+        .all(b.model_code),
+    }));
+
+  res.type('html').send(renderDemo(rows, batteries));
 });
 
-function renderDemo(rows) {
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderDemo(rows, batteries = []) {
+  const batteryCards = batteries
+    .map(
+      (b) => `
+    <article class="item">
+      <div class="qr"><img src="/api/qr/battery/${encodeURIComponent(b.model_code)}.png" alt="${esc(b.model_code)}" width="118" height="118" loading="lazy"></div>
+      <div class="meta">
+        <div class="code">${b.model_code}</div>
+        <div class="sub">${b.model_name} · ${b.company_name || '—'}</div>
+        <div class="dl">一${b.qr_mode === 'serial' ? '序列号' : '型号'}一码 · 序列号 ${b.serial_count} 个 · 已查询 ${b.scan_count} 次</div>
+        <div class="links">
+          <a class="go" href="/b/${encodeURIComponent(b.model_code)}" target="_blank">合规落地页</a>
+          ${b.samples
+            .map(
+              (s, i) =>
+                `<a class="go" href="/b/${encodeURIComponent(b.model_code)}/${encodeURIComponent(s.serial)}" target="_blank">${i === 0 ? '序列号示例' : `SN ${i + 1}`}</a>`
+            )
+            .join('')}
+          <a class="go" href="/b/${encodeURIComponent(b.model_code)}/doc.pdf" target="_blank">DoC PDF</a>
+        </div>
+      </div>
+    </article>`
+    )
+    .join('');
   const dlCount = rows.filter((r) => r.gtin).length;
   const items = rows
     .map(
@@ -173,6 +299,8 @@ function renderDemo(rows) {
   .page{max-width:1180px;margin:0 auto}
   .top{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:22px}
   h1{font-size:22px;font-weight:700;margin:0 0 8px;letter-spacing:.3px}
+  .h2{font-size:14px;font-weight:700;color:#334155;margin:0 0 12px;letter-spacing:.3px;
+      padding-left:10px;border-left:3px solid #164EBD}
   .hint{font-size:12.5px;color:#64748B;margin:0;max-width:780px;line-height:1.75}
   .hint code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;background:#fff;
              padding:2px 6px;border-radius:6px;border:1px solid #E7EDEA;color:#3C4654}
@@ -231,6 +359,9 @@ function renderDemo(rows) {
       <span class="pill blue">Digital Link ${dlCount}/${rows.length}</span>
     </div>
   </header>
+  ${batteries.length ? `
+  <h2 class="h2">电池合规二维码 · EU 2023/1542 Art.13(6)</h2>
+  <div class="grid" style="margin-bottom:26px">${batteryCards}</div>` : ''}
   ${rows.length ? `<div class="grid">${items}</div>` : '<div class="empty">还没有码，先运行 <code>npm run gen -- --count 50</code> 生成一批</div>'}
 </div>
 </body></html>`;
@@ -240,11 +371,13 @@ function renderDemo(rows) {
 app.get('/health', (_req, res) => {
   const c = db.prepare('SELECT COUNT(*) AS n FROM qr_code').get();
   const gtinModels = db.prepare('SELECT COUNT(*) AS n FROM product_model WHERE gtin IS NOT NULL').get();
+  const batteryModels = db.prepare('SELECT COUNT(*) AS n FROM battery_model WHERE status = 1').get();
   res.json({
     ok: true,
     codes: c.n,
     baseUrl: BASE_URL,
     digitalLink: { enabled: gtinModels.n > 0, gtinModels: gtinModels.n },
+    batteryCompliance: { enabled: batteryModels.n > 0, models: batteryModels.n },
   });
 });
 
