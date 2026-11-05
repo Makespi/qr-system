@@ -236,3 +236,55 @@ CREATE TABLE IF NOT EXISTS battery_scan_log (
 );
 CREATE INDEX IF NOT EXISTS idx_blog_model ON battery_scan_log(model_id);
 CREATE INDEX IF NOT EXISTS idx_blog_time  ON battery_scan_log(scan_at);
+
+-- ============================================================
+-- DPP 数字产品护照（ESPR / Regulation (EU) 2024/1781）
+-- 一个产品一份档案：必填字段全部建列，没数据也保留字段（页面显示占位）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS dpp_passport (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id         INTEGER NOT NULL,
+  dpp_id            TEXT    NOT NULL,              -- 护照唯一标识（上报 Registry 用）
+  registry_url      TEXT,                          -- Registry 索引记录地址（可选）
+  sku               TEXT,
+  model_code        TEXT,
+  product_name      TEXT    NOT NULL,
+  batch_no          TEXT,
+  serial            TEXT,
+  category          TEXT,                          -- battery / textile / furniture / equipment
+  origin_country    TEXT,
+  eori              TEXT,                          -- 欧盟 EORI 号
+  eu_rep_name       TEXT,                          -- 欧盟授权代表
+  eu_rep_address    TEXT,
+  eu_rep_contact    TEXT,
+  bom               TEXT,                          -- JSON: [{material,weight,recycledShare,origin}]
+  certificates      TEXT,                          -- JSON: [{name,number,issuer,issuedAt,url}]
+  repair            TEXT,                          -- JSON: {sparePartsYears,guideUrl,steps:[]}
+  dismantle         TEXT,                          -- JSON: {notes,tools:[]}
+  recycle           TEXT,                          -- JSON: {takeBack,notes}
+  chemistry         TEXT,                          -- 电池品类：化学体系
+  capacity          TEXT,                          -- 容量
+  cycle_life        TEXT,                          -- 性能耐久
+  carbon_footprint  TEXT,                          -- 碳足迹
+  version           TEXT    NOT NULL DEFAULT '1.0',
+  status            TEXT    NOT NULL DEFAULT 'normal', -- normal / recalled / void
+  status_note       TEXT,
+  updated_at        TEXT,
+  i18n              TEXT,                          -- JSON: {en:{product_name,...}}
+  created_at        TEXT    DEFAULT (datetime('now','localtime')),
+  UNIQUE (tenant_id, dpp_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dpp_tenant ON dpp_passport(tenant_id);
+
+-- ---------- 护照扫码日志 ----------
+CREATE TABLE IF NOT EXISTS dpp_scan_log (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL,
+  dpp_id    TEXT    NOT NULL,
+  ip        TEXT,
+  region    TEXT,
+  ua        TEXT,
+  scan_at   TEXT    DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_dpplog_id   ON dpp_scan_log(dpp_id);
+CREATE INDEX IF NOT EXISTS idx_dpplog_time ON dpp_scan_log(scan_at);

@@ -5,8 +5,10 @@ import { isValid } from './core/codegen.js';
 import { digitalLinkUrl } from './core/gs1.js';
 import { scan, resolveDigitalLink, clientIp } from './services/scan.js';
 import { resolveBattery, batteryComplianceJson } from './services/battery.js';
+import { resolveDpp, buildDppJsonLd } from './services/dpp.js';
 import { renderScanPage } from './views/scanPage.js';
 import { renderBatteryPage } from './views/batteryPage.js';
+import { renderDppPage, renderDppNotFound } from './views/dppPage.js';
 import { buildProductJsonLd } from './views/passport.js';
 import { buildDocPdf } from './views/docPdf.js';
 
@@ -146,6 +148,39 @@ async function batteryQr(res, payload) {
   }
 }
 
+// ---------- DPP 数字产品护照（ESPR / (EU) 2024/1781）----------
+// 同一个 URL 内容协商：浏览器 → HTML 护照页；机读 → JSON-LD（合规硬要求）
+
+app.get('/dpp/:id', (req, res) => {
+  const lang = req.query.lang === 'en' ? 'en' : 'zh';
+  const data = resolveDpp(req.params.id, { ip: clientIp(req), ua: req.headers['user-agent'] });
+
+  const wantsJson =
+    req.query.format === 'json' ||
+    (!/text\/html/i.test(String(req.headers.accept || '')) &&
+      /application\/(ld\+json|json)/i.test(String(req.headers.accept || '')));
+
+  if (wantsJson) {
+    if (data.state === 'not_found') {
+      return res.status(404).type('application/ld+json').send(JSON.stringify({ error: 'not_found' }));
+    }
+    return res
+      .type('application/ld+json')
+      .set('Vary', 'Accept')
+      .send(JSON.stringify(buildDppJsonLd(data, BASE_URL), null, 2));
+  }
+
+  if (data.state === 'not_found') {
+    return res.status(404).type('html').send(renderDppNotFound(lang));
+  }
+  res.type('html').send(renderDppPage(data, { lang, baseUrl: BASE_URL }));
+});
+
+// 护照二维码
+app.get('/api/qr/dpp/:id.png', async (req, res) => {
+  await batteryQr(res, `${BASE_URL}/dpp/${encodeURIComponent(req.params.id)}`);
+});
+
 // ---------- 扫码 JSON 接口（供小程序/App 复用）----------
 app.get('/api/scan/:code', (req, res) => {
   const code = String(req.params.code || '').toUpperCase();
@@ -226,7 +261,18 @@ app.get('/demo', (req, res) => {
         .all(b.model_code),
     }));
 
-  res.type('html').send(renderDemo(rows, batteries));
+  // DPP 数字产品护照（ESPR）：必填字段齐全的档案示例
+  const dpps = db
+    .prepare(
+      `SELECT p.dpp_id, p.product_name, p.category, p.version, p.status, p.updated_at,
+              t.company_name
+       FROM dpp_passport p
+       LEFT JOIN tenant t ON t.id = p.tenant_id
+       ORDER BY p.id`
+    )
+    .all();
+
+  res.type('html').send(renderDemo(rows, batteries, dpps));
 });
 
 function esc(s) {
@@ -238,7 +284,27 @@ function esc(s) {
     .replace(/'/g, '&#39;');
 }
 
-function renderDemo(rows, batteries = []) {
+function renderDemo(rows, batteries = [], dpps = []) {
+  const dppCards = dpps
+    .map(
+      (d) => `
+    <article class="item">
+      <div class="qr"><img src="/api/qr/dpp/${encodeURIComponent(d.dpp_id)}.png" alt="${esc(d.dpp_id)}" width="118" height="118" loading="lazy"></div>
+      <div class="meta">
+        <div class="code">${esc(d.dpp_id)}</div>
+        <div class="sub">${esc(d.product_name)} · ${esc(d.company_name || '—')}</div>
+        <div class="dl">v${esc(d.version)} · ${
+          d.status === 'normal' ? '正常' : d.status === 'recalled' ? '已召回' : '已作废'
+        } · ${esc(d.updated_at || '—')}</div>
+        <div class="links">
+          <a class="go" href="/dpp/${encodeURIComponent(d.dpp_id)}" target="_blank">护照页（中）</a>
+          <a class="go" href="/dpp/${encodeURIComponent(d.dpp_id)}?lang=en" target="_blank">EN</a>
+          <a class="go" href="/dpp/${encodeURIComponent(d.dpp_id)}?format=json" target="_blank">JSON-LD</a>
+        </div>
+      </div>
+    </article>`
+    )
+    .join('');
   const batteryCards = batteries
     .map(
       (b) => `
@@ -371,6 +437,9 @@ function renderDemo(rows, batteries = []) {
   ${batteries.length ? `
   <h2 class="h2">电池合规二维码 · EU 2023/1542 Art.13(6)</h2>
   <div class="grid" style="margin-bottom:26px">${batteryCards}</div>` : ''}
+  ${dpps.length ? `
+  <h2 class="h2">DPP 数字产品护照 · ESPR (EU) 2024/1781 · 同一 QR 内容协商 HTML / JSON-LD</h2>
+  <div class="grid" style="margin-bottom:26px">${dppCards}</div>` : ''}
   ${rows.length ? `<div class="grid">${items}</div>` : '<div class="empty">还没有码，先运行 <code>npm run gen -- --count 50</code> 生成一批</div>'}
 </div>
 </body></html>`;
@@ -381,12 +450,14 @@ app.get('/health', (_req, res) => {
   const c = db.prepare('SELECT COUNT(*) AS n FROM qr_code').get();
   const gtinModels = db.prepare('SELECT COUNT(*) AS n FROM product_model WHERE gtin IS NOT NULL').get();
   const batteryModels = db.prepare('SELECT COUNT(*) AS n FROM battery_model WHERE status = 1').get();
+  const dppCount = db.prepare('SELECT COUNT(*) AS n FROM dpp_passport').get();
   res.json({
     ok: true,
     codes: c.n,
     baseUrl: BASE_URL,
     digitalLink: { enabled: gtinModels.n > 0, gtinModels: gtinModels.n },
     batteryCompliance: { enabled: batteryModels.n > 0, models: batteryModels.n },
+    dpp: { enabled: dppCount.n > 0, passports: dppCount.n },
   });
 });
 

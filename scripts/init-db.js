@@ -67,6 +67,103 @@ const BATTERY = {
   },
 };
 
+// ---------- DPP 数字产品护照种子（ESPR / (EU) 2024/1781）----------
+// 第一份：电池品类，必填字段基本齐全
+// 第二份：故意留空多个字段（EORI、欧盟代表、BOM、证书、碳足迹），演示"数据没有就空"
+const DPP_LIST = [
+  {
+    dpp_id: 'DPP-JL1214-2026-0001',
+    sku: 'JL-1214-BAT',
+    model_code: 'JL-1214',
+    product_name: '精龙 12V 14Ah 锂离子电池组',
+    batch_no: 'B20261030-01',
+    serial: 'JL1214-2026-0001',
+    category: 'battery',
+    origin_country: '中国（CN）',
+    eori: 'CN2026DEMO0001',
+    eu_rep_name: 'GreenCycle Compliance GmbH',
+    eu_rep_address: 'Hafenstraße 12, 20359 Hamburg, Germany',
+    eu_rep_contact: 'compliance@greencycle-demo.eu',
+    bom: [
+      { material: '三元正极材料 NCM523', weight: '0.95 kg', recycledShare: '16%', origin: '中国' },
+      { material: '天然石墨（负极）', weight: '0.22 kg', recycledShare: '0%', origin: '中国' },
+      { material: '铜箔', weight: '0.12 kg', recycledShare: '20%', origin: '中国' },
+      { material: '铝壳与极耳', weight: '0.18 kg', recycledShare: '35%', origin: '中国' },
+      { material: '电解液（LiPF6）', weight: '0.11 kg', recycledShare: '0%', origin: '中国' },
+      { material: 'ABS 外壳', weight: '0.09 kg', recycledShare: '30%', origin: '中国' },
+      { material: 'BMS 电子元件', weight: '0.05 kg', recycledShare: '10%', origin: '中国' },
+    ],
+    certificates: [
+      {
+        name: 'EU 符合性声明（DoC）',
+        number: 'EU-DOC-2026-JL1214-001',
+        issuer: '精龙电动喷雾器',
+        issuedAt: '2026-10-30',
+        url: '/b/JL-1214/doc.pdf',
+      },
+      { name: 'RoHS 检测报告', number: 'RoHS-2026-0912', issuer: 'SGS（示例）', issuedAt: '2026-09-12', url: '' },
+      { name: 'UN 38.3 运输测试摘要', number: 'UN38.3-2026-3310', issuer: 'TÜV（示例）', issuedAt: '2026-08-20', url: '' },
+    ],
+    repair: {
+      sparePartsYears: '7 年',
+      guideUrl: '',
+      steps: [
+        '断开设备电源并取出电池组',
+        '用 PH2 十字螺丝刀拆下外壳 4 颗固定螺丝',
+        '拔下 BMS 排线，取出电芯组',
+        '更换电芯组后复装，并做一次完整充放电校准',
+      ],
+    },
+    dismantle: {
+      notes: '外壳为卡扣 + 螺丝混合结构，禁止暴力拆解；电芯属危险废物，需交由资质单位处理。',
+      tools: ['PH2 十字螺丝刀', '绝缘镊子', '防静电手环'],
+    },
+    recycle: {
+      takeBack: '可通过经销商或品牌回收点交回，也可联系欧盟授权代表安排回收',
+      notes: '符合 WEEE 单独收集要求，禁止投入生活垃圾。',
+    },
+    chemistry: '锂离子（NCM523）',
+    capacity: '12V 14Ah / 168Wh',
+    cycle_life: '≥800 次循环（80% DoD，容量保持率 ≥80%）',
+    carbon_footprint: '68 kgCO₂e/kWh（示例值，待第三方核算）',
+    version: '1.2',
+    status: 'normal',
+    status_note: null,
+    i18n: {
+      en: { product_name: 'Jinglong 12V 14Ah Li-ion Battery Pack' },
+    },
+  },
+  {
+    dpp_id: 'DPP-3WBD16-2026-0001',
+    sku: '3WBD-16',
+    model_code: '3WBD-16',
+    product_name: '3WBD-16 型背负式电动喷雾器',
+    batch_no: 'B20261030-01',
+    serial: '',
+    category: 'equipment',
+    origin_country: '中国（CN）',
+    eori: '',                    // 留空演示
+    eu_rep_name: '',             // 留空演示
+    eu_rep_address: '',
+    eu_rep_contact: '',
+    bom: [],                     // 留空演示
+    certificates: [],            // 留空演示
+    repair: null,
+    dismantle: null,
+    recycle: null,
+    chemistry: null,
+    capacity: null,
+    cycle_life: null,
+    carbon_footprint: null,
+    version: '1.0',
+    status: 'normal',
+    status_note: null,
+    i18n: {
+      en: { product_name: '3WBD-16 Knapsack Electric Sprayer' },
+    },
+  },
+];
+
 const FIELD_GROUPS = [
   { key: 'basic', label: '整机参数', i18n: { en: 'General', es: 'Datos generales' } },
   { key: 'power', label: '电池与动力', i18n: { en: 'Battery & motor', es: 'Batería y motor' } },
@@ -334,6 +431,46 @@ const seed = db.transaction(() => {
     console.log(`✓ 电池序列号：新增 ${added} 个（共 ${BATTERY.serial_count} 个）`);
   } else {
     console.log(`✓ 电池序列号：已有 ${serialCount} 个，跳过`);
+  }
+
+  // ---------- DPP 护照（必填字段建齐，没数据的留空由页面占位）----------
+  const dppInsert = db.prepare(
+    `INSERT INTO dpp_passport
+       (tenant_id, dpp_id, sku, model_code, product_name, batch_no, serial, category,
+        origin_country, eori, eu_rep_name, eu_rep_address, eu_rep_contact,
+        bom, certificates, repair, dismantle, recycle,
+        chemistry, capacity, cycle_life, carbon_footprint,
+        version, status, status_note, i18n, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))`
+  );
+  const dppUpdate = db.prepare(
+    `UPDATE dpp_passport SET sku = ?, model_code = ?, product_name = ?, batch_no = ?, serial = ?,
+       category = ?, origin_country = ?, eori = ?, eu_rep_name = ?, eu_rep_address = ?, eu_rep_contact = ?,
+       bom = ?, certificates = ?, repair = ?, dismantle = ?, recycle = ?,
+       chemistry = ?, capacity = ?, cycle_life = ?, carbon_footprint = ?,
+       version = ?, status = ?, status_note = ?, i18n = ?, updated_at = datetime('now','localtime')
+     WHERE id = ?`
+  );
+
+  for (const d of DPP_LIST) {
+    const values = [
+      d.sku, d.model_code, d.product_name, d.batch_no, d.serial, d.category,
+      d.origin_country, d.eori, d.eu_rep_name, d.eu_rep_address, d.eu_rep_contact,
+      JSON.stringify(d.bom), JSON.stringify(d.certificates), JSON.stringify(d.repair),
+      JSON.stringify(d.dismantle), JSON.stringify(d.recycle),
+      d.chemistry, d.capacity, d.cycle_life, d.carbon_footprint,
+      d.version, d.status, d.status_note, JSON.stringify(d.i18n),
+    ];
+    const exists = db
+      .prepare('SELECT id FROM dpp_passport WHERE tenant_id = ? AND dpp_id = ?')
+      .get(tenant.id, d.dpp_id);
+    if (exists) {
+      dppUpdate.run(...values, exists.id);
+      console.log(`✓ DPP 护照已更新：${d.dpp_id}`);
+    } else {
+      dppInsert.run(tenant.id, d.dpp_id, ...values);
+      console.log(`✓ DPP 护照：${d.dpp_id}`);
+    }
   }
 
   return tenant;

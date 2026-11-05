@@ -274,6 +274,7 @@ deploy/
 - [x] 客服信息：电话一键拨号 + 服务时间（如 9:00-21:00）
 - [x] GS1 Digital Link 兼容（demo）：`/01/{gtin}/21/{serial}` 解析、内容协商、二维码载荷切换
 - [x] 电池合规二维码（EU 2023/1542 Art.13(6) demo）：5 模块落地页、6 语言、DoC PDF、一型号/一序列号一码
+- [x] DPP 数字产品护照（ESPR / (EU) 2024/1781 demo）：必填字段齐全、同一 URL 内容协商 HTML/JSON-LD、无障碍双语页
 - [x] 二维码图片接口 `/api/qr/:code.png`
 - [x] 演示页 `/demo`
 
@@ -331,6 +332,18 @@ curl -H 'Accept: application/ld+json' http://localhost:3000/01/06912345678902/21
 示例（init-db 自动创建）：`/b/JL-1214`、`/b/JL-1214/JL1214-2026-0001`、`/b/JL-1214/doc.pdf`
 
 边界：演示数据均为示例，不构成合规意见；电池二维码 ≠ 电池护照（Article 77，仅 EV / LMT / >2kWh 工业电池需要护照）；DoC PDF 为英文 demo，正式文件的语言与签发要求按目标成员国规定。
+
+**DPP 数字产品护照（ESPR / (EU) 2024/1781，demo）**
+
+按《可持续产品生态设计法规》要求实现的产品数字档案页：
+
+- **同一 URL 内容协商**：`GET /dpp/{id}` 浏览器给无障碍 HTML；`Accept: application/ld+json` 给 JSON-LD 结构化数据（法规硬要求，HTML 与 JSON 分地址即不合规）
+- **必填字段全覆盖**：DPP ID、SKU、型号、批次/序列号、制造商、EORI 号、欧盟授权代表、原产地、BOM、合规证书、维修/拆解/回收指引、版本号、最后更新时间、档案状态（正常/召回/作废）；电池品类额外：化学体系、容量、循环寿命、碳足迹。**没有数据的字段照样渲染占位（— / 未提供），审核时可逐项核对**
+- **无障碍（WCAG 2.1 AA 方向）**：语义化 HTML + 跳过导航链接、表格 caption/th scope、状态用「图标 + 文字」不只靠颜色、明显键盘焦点环、页面零 JS
+- **中英双语**：`?lang=en` 服务端渲染切换（`hreflang` alternate + `aria-current`），不用前端改写 DOM
+- **示例档案**：`/dpp/DPP-JL1214-2026-0001`（电池，字段齐全）、`/dpp/DPP-3WBD16-2026-0001`（多字段留空，演示占位）；二维码 `/api/qr/dpp/{id}.png`
+
+边界（务必知晓）：JSON-LD 的 `@context` 用的是示例命名空间（`example.org/dpp/vocab#`），**正式上报 Registry 必须替换为 EN 18xxx 对应品类的官方 vocabulary**，否则上报会被驳回；Demo PDF 尚未做到 PDF/UA 无障碍格式。
 
 **码不能带租户信息。** 16 位纯随机，租户关系存在数据库里。这样公司改名、数据迁移、客户流失都不影响已经印在实物上的码。
 
