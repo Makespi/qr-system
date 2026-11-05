@@ -1,0 +1,25 @@
+# systemd 服务：/etc/systemd/system/qr-demo.service
+# 启用：
+#   sudo cp deploy/qr-demo.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now qr-demo
+#   sudo systemctl status qr-demo
+#   sudo journalctl -u qr-demo -f
+[Unit]
+Description=QR trace demo (一物一码)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/qr-system
+EnvironmentFile=/opt/qr-system/.env
+ExecStart=/usr/bin/node src/app.js
+Restart=always
+RestartSec=3
+User=qr
+Group=qr
+# SQLite 需要写 data/ 与 exports/，这两个目录归 qr 用户所有即可
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

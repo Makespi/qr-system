@@ -1,0 +1,30 @@
+{
+  "name": "qr-trace",
+  "version": "0.1.0",
+  "description": "一物一码防伪追溯平台（多租户）",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/app.js",
+    "start:demo": "node scripts/demo-boot.js",
+    "init-db": "node scripts/init-db.js",
+    "gen": "node scripts/gen-codes.js",
+    "gen-codes": "node scripts/gen-codes.js",
+    "seed-i18n": "node scripts/seed-i18n.js",
+    "verify": "node scripts/verify.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.10.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "pdfkit": "^0.15.2",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.16.0"
+  }
+}
