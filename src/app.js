@@ -9,7 +9,13 @@ import { buildProductJsonLd } from './views/passport.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
+// BASE_URL 决定二维码里写什么地址。
+// 优先显式配置；Render 会自动注入 RENDER_EXTERNAL_URL，省掉手工填。
+const BASE_URL = (
+  process.env.BASE_URL ||
+  process.env.RENDER_EXTERNAL_URL ||
+  `http://localhost:${PORT}`
+).replace(/\/$/, '');
 
 app.set('trust proxy', true);
 app.use(express.json());

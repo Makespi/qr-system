@@ -1,0 +1,15 @@
+# Render Blueprint：在 Render 里 New → Blueprint，选中本仓库即可一键部署
+# BASE_URL 不用填：Render 会注入 RENDER_EXTERNAL_URL，服务启动时自动采用
+services:
+  - type: web
+    name: qr-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DEMO_CODE_COUNT
+        value: "20"
