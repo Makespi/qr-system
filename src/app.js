@@ -29,6 +29,9 @@ app.use((req, _res, next) => {
   next();
 });
 
+// 根路径直接进演示页，避免转发端口打开时是 404
+app.get('/', (_req, res) => res.redirect('/demo'));
+
 // ---------- 扫码页（消费者唯一看到的页面）----------
 app.get('/s/:code', (req, res) => {
   const code = String(req.params.code || '').toUpperCase();
