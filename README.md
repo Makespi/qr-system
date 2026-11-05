@@ -213,10 +213,21 @@ BASE_URL=https://你的服务名.onrender.com
 - 文件系统是临时的：重新部署或实例回收后数据重建，扫码次数会归零（演示够用）
 - 要保留数据：Railway 加 Volume，或 Fly.io 挂 volume 到 `/app/data`；再进一步是换 Postgres / Turso（需要改数据访问层，不属于 demo 范围）
 
-**其他临时方案**
+**不想绑卡：用 GitHub Codespaces**
 
-- **Codespaces**：仓库页 → Code → Codespaces，`npm ci && npm run start:demo`，把 3000 端口设为 Public 就能分享；关闭 Codespace 后链接失效，适合内部评审
-- **纯静态 Pages**：只能展示渲染好的 HTML，扫码计数、防伪判定、JSON-LD 都没了，不建议当演示
+Render 对新账号会要求验证支付方式（即使免费计划）。Codespaces 用 GitHub 自己的机器，不需要卡：
+
+1. 仓库页 → **Code** → **Codespaces** → **Create codespace on main**
+2. 等 1–2 分钟：容器会自动 `npm ci` 并启动服务（`.devcontainer/devcontainer.json` 里配的）
+3. 端口 3000 已预设为 **Public**，转发后会得到一个 `https://<名称>-3000.app.github.dev` 的链接，直接发给别人也能打开
+
+限制：
+
+- Codespace **30 分钟无活动会自动停止**，链接随即失效；重新打开后域名不变，服务会自动重启
+- 个人账号每月 120 core-hours（2 核机器约 60 小时），长期挂着会耗尽
+- 适合自己演示或内部评审；要给客户长期可点的链接，还是用 Render 或 Hugging Face Spaces（免费 Docker、无需卡）
+
+**纯静态 Pages 为什么不行**：只能展示渲染好的 HTML，扫码计数、防伪判定、JSON-LD 都会失效。
 
 ## 目录结构
 
