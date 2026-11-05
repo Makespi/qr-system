@@ -38,6 +38,13 @@ app.use((req, _res, next) => {
 // 根路径直接进演示页，避免转发端口打开时是 404
 app.get('/', (_req, res) => res.redirect('/demo'));
 
+// favicon：内联 SVG，避免控制台 404
+app.get('/favicon.ico', (_req, res) => {
+  res.type('image/svg+xml').set('Cache-Control', 'public, max-age=86400').send(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#1C64F2"/><g fill="#fff"><rect x="7" y="7" width="5" height="5"/><rect x="14" y="7" width="5" height="5"/><rect x="21" y="7" width="4" height="5"/><rect x="7" y="14" width="5" height="5"/><rect x="14" y="14" width="5" height="5"/><rect x="21" y="14" width="4" height="5"/><rect x="7" y="21" width="5" height="4"/><rect x="14" y="21" width="5" height="4"/></g></svg>`
+  );
+});
+
 // ---------- 扫码页（消费者唯一看到的页面）----------
 app.get('/s/:code', (req, res) => {
   const code = String(req.params.code || '').toUpperCase();
