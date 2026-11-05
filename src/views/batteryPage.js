@@ -408,6 +408,8 @@ box-shadow:0 12px 30px -18px rgba(15,23,42,.4)}h1{font-size:18px;margin:0 0 8px}
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- 禁止浏览器自动翻译：翻译改写 DOM 会与语言切换脚本冲突 -->
+<meta name="google" content="notranslate">
 <meta name="theme-color" content="${esc(brand)}">
 <title>${esc(tenant.companyName)} · ${esc(T.title)}</title>
 <style>

@@ -288,6 +288,8 @@ function renderDemo(rows, batteries = []) {
   return `<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- 禁止浏览器自动翻译：翻译改写 DOM 会把页面搞崩（removeChild 报错） -->
+<meta name="google" content="notranslate">
 <title>演示 · 一物一码</title>
 <style>
   *{box-sizing:border-box}

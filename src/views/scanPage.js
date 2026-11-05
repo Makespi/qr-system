@@ -422,6 +422,8 @@ export function renderScanPage(data) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- 禁止浏览器自动翻译：翻译改写 DOM 会把页面搞崩（removeChild 报错） -->
+<meta name="google" content="notranslate">
 <meta name="format-detection" content="telephone=no">
 <meta name="theme-color" content="${esc(brand)}">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='${esc(brand)}'/%3E%3Cpath d='M9 17l5 5 9-11' stroke='%23fff' stroke-width='3.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
