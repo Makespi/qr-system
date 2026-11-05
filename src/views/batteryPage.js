@@ -449,6 +449,8 @@ box-shadow:0 12px 30px -18px rgba(15,23,42,.4)}h1{font-size:18px;margin:0 0 8px}
                 font-size:10.5px;font-weight:700;padding:5px 7px;border-radius:8px;line-height:1;
                 font-family:inherit;letter-spacing:.2px;transition:background .18s,color .18s}
   .langs button.on{background:#fff;color:#123E86;box-shadow:0 2px 8px rgba(8,15,35,.22)}
+  /* 演示占位：语言按钮不响应点击 */
+  .langs{pointer-events:none}
 
   .wrap{padding:0 14px 4px;margin-top:-26px;position:relative;z-index:2}
   .card{background:#fff;border-radius:var(--radius);padding:18px;margin-bottom:12px;
@@ -595,78 +597,6 @@ box-shadow:0 12px 30px -18px rgba(15,23,42,.4)}h1{font-size:18px;margin:0 0 8px}
   </footer>
 </div>
 
-<script>
-(function(){
-  var M = ${JSON.stringify(meta)};
-  var DICT = ${JSON.stringify(DICT)};
-  var VALUES = ${JSON.stringify(VALUES)};
-  var LANGS = ${JSON.stringify(LANGS)};
-
-  function pick(obj, lang){
-    if(!obj) return null;
-    if(typeof obj === 'string') return obj;
-    return obj[lang] || obj.en || obj.zh || null;
-  }
-
-  function vkey(key, lang){
-    var path = key.split('.');
-    var node = VALUES[path[0]];
-    if(!node) return null;
-    var entry = node[path.slice(1).join('.')];
-    if(!entry) return null;
-    return pick(entry, lang);
-  }
-
-  function fmtDate(s, lang){
-    if(!s) return '—';
-    var str = String(s);
-    var dateOnly = str.length === 10 && str.split('-').length === 3;
-    var d = new Date(str.replace(' ','T'));
-    if(isNaN(d.getTime())) return str;
-    try{
-      var locale = {zh:'zh-CN',en:'en-GB',de:'de-DE',fr:'fr-FR',es:'es-ES',it:'it-IT'}[lang] || 'en-GB';
-      return new Intl.DateTimeFormat(locale,
-        dateOnly ? {year:'numeric',month:'short',day:'2-digit'}
-                 : {year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'}).format(d);
-    }catch(e){ return str; }
-  }
-
-  function apply(lang){
-    document.documentElement.lang = lang === 'zh' ? 'zh-CN' : lang;
-    document.querySelectorAll('[data-i18n]').forEach(function(el){
-      var t = DICT[lang][el.getAttribute('data-i18n')];
-      if(t != null) el.textContent = t;
-    });
-    document.querySelectorAll('[data-vkey]').forEach(function(el){
-      var v = vkey(el.getAttribute('data-vkey'), lang);
-      if(v != null) el.textContent = v;
-    });
-    document.querySelectorAll('[data-ts]').forEach(function(el){
-      el.textContent = fmtDate(el.getAttribute('data-ts'), lang);
-    });
-    var tr = M.modelI18n && M.modelI18n[lang] && M.modelI18n[lang].model_name;
-    document.getElementById('mName').textContent = tr || M.modelName;
-    var co = (M.companyI18n && M.companyI18n[lang] && M.companyI18n[lang].company_name) || null;
-    document.getElementById('coName').textContent = co || document.getElementById('coName').getAttribute('data-default') || document.getElementById('coName').textContent;
-    document.getElementById('coDetail').textContent = co || document.getElementById('coDetail').getAttribute('data-default') || document.getElementById('coDetail').textContent;
-    document.querySelectorAll('#langs button').forEach(function(b){
-      b.classList.toggle('on', b.getAttribute('data-lang') === lang);
-    });
-    try{ localStorage.setItem('battery-lang', lang); }catch(e){}
-  }
-
-  document.getElementById('coName').setAttribute('data-default', document.getElementById('coName').textContent);
-  document.getElementById('coDetail').setAttribute('data-default', document.getElementById('coDetail').textContent);
-
-  document.getElementById('langs').addEventListener('click', function(e){
-    var btn = e.target.closest('button[data-lang]');
-    if(btn) apply(btn.getAttribute('data-lang'));
-  });
-
-  var saved = null;
-  try{ saved = localStorage.getItem('battery-lang'); }catch(e){}
-  apply(saved && LANGS.indexOf(saved) >= 0 ? saved : 'zh');
-})();
-</script>
+<!-- 语言切换为演示占位按钮：内容固定中文，由服务端渲染 -->
 </body></html>`;
 }

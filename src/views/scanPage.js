@@ -481,6 +481,8 @@ export function renderScanPage(data) {
                 font-size:11px;font-weight:700;padding:6px 9px;border-radius:9px;line-height:1;
                 font-family:inherit;letter-spacing:.3px;transition:background .18s,color .18s}
   .langs button.on{background:#fff;color:var(--brand-dark);box-shadow:0 2px 8px rgba(8,15,35,.22)}
+  /* 演示占位：语言按钮不响应点击 */
+  .langs{pointer-events:none}
 
   /* ---------- 主区 ---------- */
   .wrap{padding:0 14px 4px;margin-top:-26px;position:relative;z-index:2}
@@ -807,12 +809,9 @@ export function renderScanPage(data) {
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
 
-    try{ localStorage.setItem('qr_lang', lang); }catch(e){}
   }
 
-  document.querySelectorAll('#langs button').forEach(function(b){
-    b.addEventListener('click', function(){ apply(b.getAttribute('data-lang')); });
-  });
+  // 语言切换为演示占位按钮，不绑定切换事件
 
   // 复制防伪码
   var cpy = document.getElementById('cpyBtn');
@@ -837,23 +836,9 @@ export function renderScanPage(data) {
     });
   }
 
-  // 初始语言：上次选择 > 浏览器语言 > 中文
-  var saved = null;
-  try{ saved = localStorage.getItem('qr_lang'); }catch(e){}
-  var nav = (navigator.language || 'zh').toLowerCase();
-  var auto = nav.indexOf('zh') === 0 ? 'zh' : (nav.indexOf('es') === 0 ? 'es' : 'en');
-  var currentLang = saved && LANGS.indexOf(saved) >= 0 ? saved : auto;
-  window.__setLang = apply;
+  // 语言切换已改为演示占位：内容固定中文
+  var currentLang = 'zh';
   apply(currentLang);
-
-  // 页面内 1 秒后把 URL 上的 lang 参数同步，便于分享指定语言
-  try{
-    var u = new URL(location.href);
-    if(u.searchParams.get('lang') && LANGS.indexOf(u.searchParams.get('lang')) >= 0){
-      currentLang = u.searchParams.get('lang');
-      apply(currentLang);
-    }
-  }catch(e){}
 })();
 </script>
 </body>
